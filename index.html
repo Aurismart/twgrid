@@ -7,36 +7,91 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <style>
     html, body, #map { height: 100%; margin: 0; }
+
+    :root{
+      /* 桌機/平板預設面板寬度（可被拖曳覆蓋）*/
+      --panel-width: 700px;
+      --panel-min: 220px;
+      --panel-max: 780px;
+    }
+
     .panel {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
       background: #fff; padding: 10px; border: 1px solid #ccc; border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.15); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", Arial;
-      min-width: 260px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", Arial;
+      min-width: var(--panel-min);
+      width: var(--panel-width);
+      max-width: var(--panel-max);
+      box-sizing: border-box;
     }
+
+    /* 右側拖曳拉把 */
+    .panel-resizer{
+      position: absolute;
+      top: 0; right: -4px;
+      width: 8px; height: 100%;
+      cursor: ew-resize;
+      background: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.05) 50%, transparent 100%);
+      border-radius: 4px;
+    }
+    .panel.resizing, body.resizing { user-select: none; cursor: ew-resize; }
+
     .panel-header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-    .panel-header .title { font-weight:700; font-size:14px; }
+    .panel-header .title { font-weight:700; font-size:18px; }
     .panel-header button { border: 1px solid #ccc; background:#f9f9f9; border-radius:6px; padding:4px 8px; cursor:pointer; }
     .panel-body { margin-top:6px; }
-    .panel label { font-size: 11px; color: #555; display:block; margin-top: 6px; }
-    .panel select, .panel button, .panel input[type="number"] { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; font-size: 13px; }
+    .panel label { font-size: 16px; color: #555; display:block; margin-top: 6px; }
+    .panel select, .panel button, .panel input[type="number"] {
+      width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; font-size: 16px;
+    }
     .dataset-box { max-height: 180px; overflow: auto; border: 1px solid #ddd; border-radius: 6px; padding: 6px; margin-top: 6px; }
-    .dataset-item { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 13px; }
+    .dataset-item { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 16px; }
     .dataset-item .name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dataset-item .count { color: #666; font-size: 12px; }
-    .legend { line-height: 1.2; background: #fff; padding: 8px; border: 1px solid #ccc; border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.15); position:absolute; right:10px; bottom:60px; }
+    .dataset-item .count { color: #666; font-size: 16px; }
+
+    .legend {
+      line-height: 1.2; background: #fff; padding: 8px; border: 1px solid #ccc; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15); position:absolute; right:10px; bottom:60px;
+    }
     .legend .row { display: flex; align-items: center; margin: 4px 0; }
     .legend .swatch { width: 14px; height: 14px; margin-right: 6px; border: 1px solid rgba(0,0,0,.2); }
+
     .credit {
       position: absolute; right: 10px; bottom: 10px; background: rgba(255,255,255,.9);
-      padding: 8px 10px; border-radius: 8px; font-size: 12px; border: 1px solid #ccc;
+      padding: 8px 10px; border-radius: 8px; font-size: 16px; border: 1px solid #ccc;
     }
-    .hint { font-size: 11px; color: #666; margin-top: 6px; }
+    /* ⇩ 新增：資料來源（左下角） */
+    .source {
+      position: absolute; left: 10px; bottom: 10px; background: rgba(255,255,255,.9);
+      padding: 8px 10px; border-radius: 8px; font-size: 16px; border: 1px solid #ccc;
+      max-width: min(60vw, 700px);
+      z-index: 1100; /* ← 新增這行，確保不被面板/地圖蓋住 */
+
+    }
+    .source a { text-decoration: none; }
+    .source a:hover { text-decoration: underline; }
+
+    .hint { font-size: 16px; color: #666; margin-top: 6px; }
 
     /* 收合狀態 */
     .panel.collapsed { padding:8px; min-width:auto; width:auto; }
-    .panel.collapsed .panel-body { display:none; }
-    .panel.collapsed .panel-header .title { font-size:13px; }
+    .panel.collapsed .panel-body, .panel.collapsed .panel-resizer { display:none; }
+    .panel.collapsed .panel-header .title { font-size:16px; }
+
+
+
+    /* 手機自適應（小於 768px） */
+    @media (max-width: 768px) {
+      :root{ --panel-width: calc(100vw - 24px); --panel-min: 220px; --panel-max: none; }
+      .panel { left: 12px; right: 12px; width: calc(100% - 24px) !important; }
+      .panel-resizer{ display:none; }               /* 手機隱藏拉把 */
+      .dataset-box { max-height: min(45vh, 260px); }/* 手機清單用視窗高度 */
+      .legend { right: 8px; bottom: 56px; }         /* 讓出來源區塊空間 */
+      .credit { right: 8px; bottom: 8px; }
+      .source { left: 8px; bottom: 8px; font-size: 14px; max-width: calc(100vw - 140px); }
+      .leaflet-tooltip { font-size: 14px; line-height: 1.2; }
+    }
   </style>
 </head>
 <body>
@@ -81,12 +136,20 @@
     <label for="topNInput">Tooltip 顯示物種 Top N</label>
     <input id="topNInput" type="number" min="1" max="10" step="1" value="3" />
 
-    <div class="hint">顏色以固定門檻分級：0–&lt;step、step–&lt;2×step、…、≥4×step。滑到方格才顯示 Tooltip（顯示所選資料集合併後的物種排名）。</div>
+    <div class="hint">顏色以固定門檻分級，滑到方格才顯示 Tooltip（顯示所選資料集合併後的物種排名）。</div>
   </div>
+
+  <!-- 拉把 -->
+  <div class="panel-resizer" id="panelResizer" aria-hidden="true"></div>
 </div>
 
 <div id="legend" class="legend"></div>
 <div class="credit">底圖 © OpenStreetMap 貢獻者</div>
+<!-- ⇩ 新增：資料來源（動態顯示目前 CSV 與已選資料集數量） -->
+<div class="source" id="sourceFooter">
+  資料來源：<a href="https://tbiadata.tw/" target="_blank" rel="noopener noreferrer">TBIA</a>
+  （目前：TBIA-鵯科，已選 0 個資料集）
+</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
@@ -117,6 +180,7 @@ const cache = new Map();
 // UI
 const panel        = document.getElementById('controlPanel');
 const collapseBtn  = document.getElementById('collapseBtn');
+const resizer      = document.getElementById('panelResizer');
 const csvSelect    = document.getElementById('csvSelect');
 const scaleSelect  = document.getElementById('scaleSelect');
 const stepInput    = document.getElementById('stepInput');
@@ -124,8 +188,9 @@ const datasetBox   = document.getElementById('datasetBox');
 const selectAllBtn = document.getElementById('selectAllBtn');
 const clearAllBtn  = document.getElementById('clearAllBtn');
 const topNInput    = document.getElementById('topNInput');
+const sourceFooter = document.getElementById('sourceFooter');
 
-// 收合面板（文字：收合 / 展開）
+/* —— 收合面板（文字：收合 / 展開）—— */
 collapseBtn.addEventListener('click', () => {
   panel.classList.toggle('collapsed');
   const collapsed = panel.classList.contains('collapsed');
@@ -133,10 +198,49 @@ collapseBtn.addEventListener('click', () => {
   collapseBtn.title = collapsed ? '展開' : '收合';
 });
 
-// —— 調色盤（5 階固定）——
+/* —— 拖曳調整面板寬度（桌機/平板）—— */
+(function enableResize(){
+  if (!resizer) return;
+
+  const minW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--panel-min')) || 220;
+  const maxW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--panel-max')) || 480;
+
+  let startX = 0, startW = 0, resizing = false;
+
+  const onDown = (clientX) => {
+    resizing = true;
+    startX = clientX;
+    startW = panel.getBoundingClientRect().width;
+    document.body.classList.add('resizing');
+    panel.classList.add('resizing');
+  };
+  const onMove = (clientX) => {
+    if (!resizing) return;
+    const dx = clientX - startX;
+    let w = Math.max(minW, Math.min(maxW, Math.round(startW + dx)));
+    panel.style.width = w + 'px';
+  };
+  const onUp = () => {
+    resizing = false;
+    document.body.classList.remove('resizing');
+    panel.classList.remove('resizing');
+  };
+
+  // 滑鼠
+  resizer.addEventListener('mousedown', (e)=>{ e.preventDefault(); onDown(e.clientX); });
+  window.addEventListener('mousemove', (e)=> onMove(e.clientX));
+  window.addEventListener('mouseup', onUp);
+
+  // 觸控（平板可能用得到）
+  resizer.addEventListener('touchstart', (e)=>{ if (e.touches[0]) onDown(e.touches[0].clientX); }, {passive:true});
+  window.addEventListener('touchmove',  (e)=>{ if (e.touches[0]) onMove(e.touches[0].clientX); }, {passive:true});
+  window.addEventListener('touchend', onUp);
+})();
+
+/* —— 調色盤（5 階固定）—— */
 const PALETTE = ['#eff3ff','#bdd7e7','#6baed6','#2171b5','#08306b'];
 
-// —— 依「基數 step」決定顏色（0–<step, step–<2*step, …, ≥4*step 共 5 級）——
+/* —— 依「基數 step」決定顏色（0–<step, step–<2*step, …, ≥4*step 共 5 級）—— */
 function colorByStep(v, step){
   if (!Number.isFinite(v) || v < step) return PALETTE[0];
   if (v < 2*step) return PALETTE[1];
@@ -145,7 +249,7 @@ function colorByStep(v, step){
   return PALETTE[4]; // ≥ 4*step
 }
 
-// —— 圖例（固定顯示 5 階，不會被最大值影響）——
+/* —— 圖例（固定顯示 5 階，不會被最大值影響）—— */
 function updateLegendByStep(step, title="所選資料集總筆數") {
   const el = document.getElementById('legend');
   const labels = [
@@ -161,7 +265,7 @@ function updateLegendByStep(step, title="所選資料集總筆數") {
   el.innerHTML = `<div style="font-weight:600;margin-bottom:6px;">圖例：${title}｜固定步長=${step}｜級數=5</div>${rows.join('')}`;
 }
 
-// —— 計算（依當前 CSV）——
+/* —— 計算（依當前 CSV）—— */
 function computeTop10Datasets(geojson){
   const totals = {};
   for (const f of geojson.features) {
@@ -203,7 +307,7 @@ function buildSpeciesRankHTML(props, topN){
   return top.map(([name,cnt],i)=>`${i+1}. ${fmt(name)}(${cnt})`).join('<br>');
 }
 
-// —— 依當前 CSV 重建 Top10 清單（支援全不選時不自動重勾）——
+/* —— 依當前 CSV 重建 Top10 清單（支援全不選時不自動重勾）—— */
 function rebuildDatasetList(geojson, {autoSelectIfEmpty=true} = {}){
   const { top10, totals } = computeTop10Datasets(geojson);
   top10Datasets = top10;
@@ -226,11 +330,12 @@ function rebuildDatasetList(geojson, {autoSelectIfEmpty=true} = {}){
     row.querySelector('input').addEventListener('change', e => {
       if (e.target.checked) selectedDatasets.add(name); else selectedDatasets.delete(name);
       renderLayer(currentData);
+      updateSourceFooter(); // 勾選變動就更新來源顯示
     });
   }
 }
 
-// —— 格網 ID —— 
+/* —— 格網 ID —— */
 function detectGridId(geojson){
   const props = geojson.features[0]?.properties || {};
   const keys = Object.keys(props);
@@ -239,7 +344,16 @@ function detectGridId(geojson){
            : keys.find(k => !['total_count','datasets'].includes(k)) || null);
 }
 
-// —— 主繪圖（hover 才顯示 Tooltip）——
+/* —— 更新頁面左下角的「資料來源」內容 —— */
+function updateSourceFooter(){
+  const csvLabel = csvSelect.options[csvSelect.selectedIndex].textContent.trim();
+  const n = selectedDatasets.size;
+  sourceFooter.innerHTML =
+    `資料來源：<a href="https://tbiadata.tw/" target="_blank" rel="noopener noreferrer">TBIA</a>` +
+    `（目前：<b>${csvLabel}</b>，已選 <b>${n}</b> 個資料集）`;
+}
+
+/* —— 主繪圖（hover 才顯示 Tooltip）—— */
 function renderLayer(geojson){
   if (gridLayer) { map.removeLayer(gridLayer); gridLayer = null; }
   const step = Math.max(1, Number(stepInput.value)||50);
@@ -271,7 +385,7 @@ function renderLayer(geojson){
   updateLegendByStep(step);
 }
 
-// —— 載入當前 CSV + 尺度 —— 
+/* —— 載入當前 CSV + 尺度 —— */
 async function loadCurrent(){
   const csvTag = csvSelect.value;
   const scale  = scaleSelect.value;
@@ -290,9 +404,10 @@ async function loadCurrent(){
   suppressAutoSelect = false;
   rebuildDatasetList(currentData, {autoSelectIfEmpty:true});
   renderLayer(currentData);
+  updateSourceFooter(); // 切換資料時更新來源顯示
 }
 
-// 事件
+/* —— 事件 —— */
 [csvSelect, scaleSelect].forEach(el => el.addEventListener('change', loadCurrent));
 [stepInput, topNInput].forEach(el => el.addEventListener('change', () => renderLayer(currentData)));
 
@@ -301,6 +416,7 @@ selectAllBtn.addEventListener('click', () => {
   suppressAutoSelect = false;
   renderLayer(currentData);
   rebuildDatasetList(currentData, {autoSelectIfEmpty:false});
+  updateSourceFooter();
 });
 
 clearAllBtn.addEventListener('click', () => {
@@ -309,6 +425,7 @@ clearAllBtn.addEventListener('click', () => {
   renderLayer(currentData);
   rebuildDatasetList(currentData, {autoSelectIfEmpty:false});
   suppressAutoSelect = false;
+  updateSourceFooter();
 });
 
 // 初始

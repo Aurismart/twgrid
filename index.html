@@ -131,7 +131,7 @@
     </div>
 
     <label for="topNInput">Tooltip 顯示物種 Top N</label>
-    <input id="topNInput" type="number" min="1" max="10" step="1" value="3" />
+    <input id="topNInput" type="number" min="1" max="99" step="1" value="10" />
 
     <div class="hint">顏色以固定門檻分級，滑到方格才顯示 Tooltip（顯示所選資料集合併後的物種排名）。</div>
   </div>
@@ -375,7 +375,7 @@ function renderLayer(geojson){
       }
       const id = gridIdKey ? (f.properties[gridIdKey] ?? '') : '';
       const selTotal = v;
-      const topN = Math.max(1, Math.min(10, Number(topNInput.value)||3));
+      const topN = Math.max(1, Math.min(10, Number(topNInput.value)||10));
       const rankHtml = buildSpeciesRankHTML(f.properties, topN);
       const html = `
         <div>

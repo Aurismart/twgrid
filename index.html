@@ -9,17 +9,20 @@
     html, body, #map { height: 100%; margin: 0; }
     .panel {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
-      background: #fff; padding: 12px; border: 1px solid #ccc; border-radius: 10px;
+      background: #fff; padding: 10px; border: 1px solid #ccc; border-radius: 10px;
       box-shadow: 0 2px 8px rgba(0,0,0,.15); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", Arial;
-      min-width: 330px;
+      min-width: 260px;
     }
-    .panel label { font-size: 12px; color: #555; display:block; margin-top: 6px; }
-    .panel select, .panel button, .panel input[type="number"] { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
-    .dataset-box { max-height: 230px; overflow: auto; border: 1px solid #ddd; border-radius: 6px; padding: 6px; margin-top: 6px; }
-    .dataset-item { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 14px; }
+    .panel-header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .panel-header .title { font-weight:700; font-size:14px; }
+    .panel-header button { border: 1px solid #ccc; background:#f9f9f9; border-radius:6px; padding:4px 8px; cursor:pointer; }
+    .panel-body { margin-top:6px; }
+    .panel label { font-size: 11px; color: #555; display:block; margin-top: 6px; }
+    .panel select, .panel button, .panel input[type="number"] { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; font-size: 13px; }
+    .dataset-box { max-height: 180px; overflow: auto; border: 1px solid #ddd; border-radius: 6px; padding: 6px; margin-top: 6px; }
+    .dataset-item { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 13px; }
     .dataset-item .name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dataset-item .count { color: #666; font-size: 12px; }
-
     .legend { line-height: 1.2; background: #fff; padding: 8px; border: 1px solid #ccc; border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,.15); position:absolute; right:10px; bottom:60px; }
     .legend .row { display: flex; align-items: center; margin: 4px 0; }
@@ -28,58 +31,58 @@
       position: absolute; right: 10px; bottom: 10px; background: rgba(255,255,255,.9);
       padding: 8px 10px; border-radius: 8px; font-size: 12px; border: 1px solid #ccc;
     }
-    .hint { font-size: 12px; color: #666; margin-top: 6px; }
+    .hint { font-size: 11px; color: #666; margin-top: 6px; }
+
+    /* 收合狀態 */
+    .panel.collapsed { padding:8px; min-width:auto; width:auto; }
+    .panel.collapsed .panel-body { display:none; }
+    .panel.collapsed .panel-header .title { font-size:13px; }
   </style>
 </head>
 <body>
 <div id="map"></div>
 
-<div class="panel">
-  <div style="font-weight:700;">TWGrid</div>
-
-  <label for="csvSelect">資料來源</label>
-  <select id="csvSelect">
-    <option value="鵯科" selected>TBIA-鵯科</option>
-    <option value="赤蛙">TBIA-赤蛙</option>
-    <option value="樹蛙">TBIA-樹蛙</option>
-  </select>
-
-  <label for="scaleSelect">網格尺度</label>
-  <select id="scaleSelect">
-    <option value="1km">1 公里</option>
-    <option value="5km" selected>5 公里</option>
-    <option value="10km">10 公里</option>
-  </select>
-
-  <label for="schemeSelect">顏色分級（基數可調整）</label>
-  <select id="schemeSelect">
-    <option value="quantile" >分位數</option>
-    <option value="autoMax">等距</option>
-    <option value="fixed" selected>自訂基數</option>
-  </select>
-
-  <div style="display:flex; gap:8px;">
-    <div style="flex:1;">
-      <label for="classesInput">級數（3~9）</label>
-      <input id="classesInput" type="number" min="3" max="9" step="1" value="5" />
-    </div>
-    <div style="flex:1;">
-      <label for="stepInput">基數（固定基數專用）</label>
-      <input id="stepInput" type="number" min="1" step="1" value="50" />
-    </div>
+<div class="panel" id="controlPanel">
+  <div class="panel-header">
+    <div class="title">TWGrid</div>
+    <button id="collapseBtn" title="收合">收合</button>
   </div>
 
-  <label>資料集（依當前資料來源的總筆數排序，僅顯示 Top10）</label>
-  <div class="dataset-box" id="datasetBox"></div>
-  <div style="display:flex; gap:8px; margin-top:6px;">
-    <button id="selectAllBtn">全選</button>
-    <button id="clearAllBtn">全不選</button>
+  <div class="panel-body">
+    <label for="csvSelect">資料來源</label>
+    <select id="csvSelect">
+      <option value="鵯科" selected>TBIA-鵯科</option>
+      <option value="赤蛙">TBIA-赤蛙</option>
+      <option value="樹蛙">TBIA-樹蛙</option>
+    </select>
+
+    <label for="scaleSelect">網格尺度</label>
+    <select id="scaleSelect">
+      <option value="1km">1 公里</option>
+      <option value="5km" selected>5 公里</option>
+      <option value="10km">10 公里</option>
+    </select>
+
+    <!-- 只留「基數」 -->
+    <div style="display:flex; gap:8px;">
+      <div style="flex:1;">
+        <label for="stepInput">著色步長（基數）</label>
+        <input id="stepInput" type="number" min="1" step="1" value="50" />
+      </div>
+    </div>
+
+    <label>資料集（依當前來源總筆數排序，僅顯示 Top10）</label>
+    <div class="dataset-box" id="datasetBox"></div>
+    <div style="display:flex; gap:8px; margin-top:6px;">
+      <button id="selectAllBtn">全選</button>
+      <button id="clearAllBtn">全不選</button>
+    </div>
+
+    <label for="topNInput">Tooltip 顯示物種 Top N</label>
+    <input id="topNInput" type="number" min="1" max="10" step="1" value="3" />
+
+    <div class="hint">顏色以固定門檻分級：0–&lt;step、step–&lt;2×step、…、≥4×step。滑到方格才顯示 Tooltip（顯示所選資料集合併後的物種排名）。</div>
   </div>
-
-  <label for="topNInput">Tooltip 顯示物種 Top N</label>
-  <input id="topNInput" type="number" min="1" max="10" step="1" value="3" />
-
-  <div class="hint">顏色：所選資料集在每格的總筆數（基數可調）。滑到方格才顯示 Tooltip，內容為「所選資料集合併後的物種排名」。</div>
 </div>
 
 <div id="legend" class="legend"></div>
@@ -87,10 +90,10 @@
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-/* 把這裡改成你的實際檔名（每個 CSV 自己有 1/5/10km 三份） */
+/* 檔名對應（每個資料來源都各有 1/5/10km） */
 const FILES = {
   "鵯科": { "1km": "grid_by_ds_species_1km_bird_.geojson", "5km": "grid_by_ds_species_5km_bird_.geojson", "10km": "grid_by_ds_species_10km_bird_.geojson" },
-  "赤蛙": { "1km": "grid_by_ds_species_1km_red_.geojson", "5km": "grid_by_ds_species_5km_red_.geojson", "10km": "grid_by_ds_species_10km_red_.geojson" },
+  "赤蛙": { "1km": "grid_by_ds_species_1km_red_.geojson",  "5km": "grid_by_ds_species_5km_red_.geojson",  "10km": "grid_by_ds_species_10km_red_.geojson"  },
   "樹蛙": { "1km": "grid_by_ds_species_1km_tree_.geojson", "5km": "grid_by_ds_species_5km_tree_.geojson", "10km": "grid_by_ds_species_10km_tree_.geojson" },
 };
 
@@ -108,83 +111,57 @@ let gridIdKey = null;
 let currentData = null;
 let top10Datasets = [];
 let selectedDatasets = new Set();
+let suppressAutoSelect = false;   // 避免「全不選」後又自動全選
 const cache = new Map();
 
 // UI
-const csvSelect     = document.getElementById('csvSelect');
-const scaleSelect   = document.getElementById('scaleSelect');
-const schemeSelect  = document.getElementById('schemeSelect');
-const classesInput  = document.getElementById('classesInput');
-const stepInput     = document.getElementById('stepInput');
-const datasetBox    = document.getElementById('datasetBox');
-const selectAllBtn  = document.getElementById('selectAllBtn');
-const clearAllBtn   = document.getElementById('clearAllBtn');
-const topNInput     = document.getElementById('topNInput');
+const panel        = document.getElementById('controlPanel');
+const collapseBtn  = document.getElementById('collapseBtn');
+const csvSelect    = document.getElementById('csvSelect');
+const scaleSelect  = document.getElementById('scaleSelect');
+const stepInput    = document.getElementById('stepInput');
+const datasetBox   = document.getElementById('datasetBox');
+const selectAllBtn = document.getElementById('selectAllBtn');
+const clearAllBtn  = document.getElementById('clearAllBtn');
+const topNInput    = document.getElementById('topNInput');
 
-// 顏色映射與分級（可調基數）
-function colorScale(t){
-  // 提高對比
-  if (t>0.7) return '#08306b';
-  if (t>0.5) return '#2171b5';
-  if (t>0.3) return '#6baed6';
-  if (t>0.1) return '#bdd7e7';
-  return '#eff3ff';
-}
-function getBreaks(values){
-  const k = Math.max(3, Math.min(9, Number(classesInput.value)||5));
-  const mode = schemeSelect.value;
-  const vs = values.filter(v => Number.isFinite(v)).sort((a,b)=>a-b);
-  if (vs.length===0) return [0,1,2,3,4,5];
+// 收合面板（文字：收合 / 展開）
+collapseBtn.addEventListener('click', () => {
+  panel.classList.toggle('collapsed');
+  const collapsed = panel.classList.contains('collapsed');
+  collapseBtn.textContent = collapsed ? '展開' : '收合';
+  collapseBtn.title = collapsed ? '展開' : '收合';
+});
 
-  if (mode === 'quantile') {
-    const q = [];
-    for (let i=0;i<=k;i++){
-      const pos = i*(vs.length-1)/k;
-      const lo = Math.floor(pos), hi = Math.ceil(pos);
-      const val = (lo===hi) ? vs[lo] : vs[lo] + (vs[hi]-vs[lo])*(pos-lo);
-      q.push(val);
-    }
-    return Array.from(new Set(q));
-  }
-  if (mode === 'autoMax') {
-    const max = Math.max(...vs, 1);
-    const step = Math.ceil(max / k) || 1;
-    const arr = []; for (let i=0;i<=k;i++) arr.push(i*step);
-    return arr;
-  }
-  // 固定步長（自訂基數）
-  const step = Math.max(1, Number(stepInput.value)||50);
-  const arr = []; for (let i=0;i<=k;i++) arr.push(i*step);
-  return arr;
+// —— 調色盤（5 階固定）——
+const PALETTE = ['#eff3ff','#bdd7e7','#6baed6','#2171b5','#08306b'];
+
+// —— 依「基數 step」決定顏色（0–<step, step–<2*step, …, ≥4*step 共 5 級）——
+function colorByStep(v, step){
+  if (!Number.isFinite(v) || v < step) return PALETTE[0];
+  if (v < 2*step) return PALETTE[1];
+  if (v < 3*step) return PALETTE[2];
+  if (v < 4*step) return PALETTE[3];
+  return PALETTE[4]; // ≥ 4*step
 }
-function getColorByValue(v, breaks){
-  if (!Number.isFinite(v) || breaks.length<2) return '#eff3ff';
-  const min = breaks[0], max = breaks[breaks.length-1];
-  const t = (max===min) ? 0 : (v - min) / (max - min);
-  return colorScale(t);
-}
-function updateLegend(breaks, title="所選資料集總筆數") {
+
+// —— 圖例（固定顯示 5 階，不會被最大值影響）——
+function updateLegendByStep(step, title="所選資料集總筆數") {
   const el = document.getElementById('legend');
-  if (breaks.length < 2) { el.innerHTML = '<b>圖例</b><div>無資料</div>'; return; }
-  const rows = [];
-  for (let i=0;i<breaks.length-1;i++){
-    const v0 = breaks[i], v1 = breaks[i+1];
-    const mid = (v0+v1)/2;
-    rows.push(
-      `<div class="row">
-         <div class="swatch" style="background:${getColorByValue(mid, breaks)}"></div>
-         <div>${Math.round(v0).toLocaleString()}–${Math.round(v1).toLocaleString()}</div>
-       </div>`
-    );
-  }
-  const modeLabel = schemeSelect.value === 'quantile' ? '分位數'
-                   : schemeSelect.value === 'autoMax' ? '等距(自動最大值)'
-                   : `固定步長=${Number(stepInput.value)||50}`;
-  const k = Math.max(3, Math.min(9, Number(classesInput.value)||5));
-  el.innerHTML = `<div style="font-weight:600;margin-bottom:6px;">圖例：${title}｜${modeLabel}｜級數=${k}</div>${rows.join('')}`;
+  const labels = [
+    `0–<${step}`,
+    `${step}–<${2*step}`,
+    `${2*step}–<${3*step}`,
+    `${3*step}–<${4*step}`,
+    `≥ ${4*step}`
+  ];
+  const rows = labels.map((txt, i) =>
+    `<div class="row"><div class="swatch" style="background:${PALETTE[i]}"></div><div>${txt}</div></div>`
+  );
+  el.innerHTML = `<div style="font-weight:600;margin-bottom:6px;">圖例：${title}｜固定步長=${step}｜級數=5</div>${rows.join('')}`;
 }
 
-// 計算（依**當前 CSV**）：Top10 資料集、所選資料集總筆數、所選資料集的物種排名
+// —— 計算（依當前 CSV）——
 function computeTop10Datasets(geojson){
   const totals = {};
   for (const f of geojson.features) {
@@ -226,14 +203,15 @@ function buildSpeciesRankHTML(props, topN){
   return top.map(([name,cnt],i)=>`${i+1}. ${fmt(name)}(${cnt})`).join('<br>');
 }
 
-// UI：依當前 CSV 重建 Top10 清單
-function rebuildDatasetList(geojson){
+// —— 依當前 CSV 重建 Top10 清單（支援全不選時不自動重勾）——
+function rebuildDatasetList(geojson, {autoSelectIfEmpty=true} = {}){
   const { top10, totals } = computeTop10Datasets(geojson);
   top10Datasets = top10;
 
-  // 沒選擇→預設全選；若換 CSV/尺度，把不在 Top10 的移除
   selectedDatasets = new Set([...selectedDatasets].filter(n => top10Datasets.includes(n)));
-  if (selectedDatasets.size===0) selectedDatasets = new Set(top10Datasets);
+  if (selectedDatasets.size===0 && autoSelectIfEmpty && !suppressAutoSelect) {
+    selectedDatasets = new Set(top10Datasets);
+  }
 
   datasetBox.innerHTML = '';
   for (const name of top10Datasets) {
@@ -252,7 +230,7 @@ function rebuildDatasetList(geojson){
   }
 }
 
-// 格網 ID 欄位
+// —— 格網 ID —— 
 function detectGridId(geojson){
   const props = geojson.features[0]?.properties || {};
   const keys = Object.keys(props);
@@ -261,18 +239,16 @@ function detectGridId(geojson){
            : keys.find(k => !['total_count','datasets'].includes(k)) || null);
 }
 
-// 主繪圖（無中心標籤；滑到格網才顯示物種排名）
+// —— 主繪圖（hover 才顯示 Tooltip）——
 function renderLayer(geojson){
   if (gridLayer) { map.removeLayer(gridLayer); gridLayer = null; }
-
-  const values = geojson.features.map(f => selectedTotalForGrid(f.properties));
-  const breaks = getBreaks(values);
+  const step = Math.max(1, Number(stepInput.value)||50);
 
   gridLayer = L.geoJSON(geojson, {
-    style: f => ({
-      fillColor: getColorByValue(selectedTotalForGrid(f.properties), breaks),
-      fillOpacity: 0.8, color: '#ffffff', weight: 0.4
-    }),
+    style: f => {
+      const v = selectedTotalForGrid(f.properties);
+      return { fillColor: colorByStep(v, step), fillOpacity: 0.8, color: '#ffffff', weight: 0.4 };
+    },
     onEachFeature: (f, lyr) => {
       const id = gridIdKey ? (f.properties[gridIdKey] ?? '') : '';
       const selTotal = selectedTotalForGrid(f.properties);
@@ -292,10 +268,10 @@ function renderLayer(geojson){
     }
   }).addTo(map);
 
-  updateLegend(breaks);
+  updateLegendByStep(step);
 }
 
-// 載入當前 CSV + 尺度
+// —— 載入當前 CSV + 尺度 —— 
 async function loadCurrent(){
   const csvTag = csvSelect.value;
   const scale  = scaleSelect.value;
@@ -310,16 +286,30 @@ async function loadCurrent(){
   currentData = cache.get(url);
 
   detectGridId(currentData);
-  selectedDatasets.clear(); // 切換 CSV/尺度時重置，由 rebuildDatasetList 決定預設
-  rebuildDatasetList(currentData);
+  selectedDatasets.clear(); // 切換 CSV/尺度時重置
+  suppressAutoSelect = false;
+  rebuildDatasetList(currentData, {autoSelectIfEmpty:true});
   renderLayer(currentData);
 }
 
 // 事件
 [csvSelect, scaleSelect].forEach(el => el.addEventListener('change', loadCurrent));
-[schemeSelect, classesInput, stepInput, topNInput].forEach(el => el.addEventListener('change', () => renderLayer(currentData)));
-selectAllBtn.addEventListener('click', () => { selectedDatasets = new Set(top10Datasets); renderLayer(currentData); rebuildDatasetList(currentData); });
-clearAllBtn.addEventListener('click', () => { selectedDatasets.clear(); renderLayer(currentData); rebuildDatasetList(currentData); });
+[stepInput, topNInput].forEach(el => el.addEventListener('change', () => renderLayer(currentData)));
+
+selectAllBtn.addEventListener('click', () => {
+  selectedDatasets = new Set(top10Datasets);
+  suppressAutoSelect = false;
+  renderLayer(currentData);
+  rebuildDatasetList(currentData, {autoSelectIfEmpty:false});
+});
+
+clearAllBtn.addEventListener('click', () => {
+  selectedDatasets.clear();
+  suppressAutoSelect = true; // 避免 rebuild 又自動全選
+  renderLayer(currentData);
+  rebuildDatasetList(currentData, {autoSelectIfEmpty:false});
+  suppressAutoSelect = false;
+});
 
 // 初始
 loadCurrent();

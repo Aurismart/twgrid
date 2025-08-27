@@ -60,9 +60,9 @@
     
 
     .credit {
-      position: absolute; right: 10px; bottom: 10px; background: rgba(255,255,255,.9);
+      position: absolute; right: 10px; bottom: 20px; background: rgba(255,255,255,.9);
       padding: 8px 10px; border-radius: 8px; font-size: 16px; border: 1px solid #ccc;
-      z-index: 1100; /* 確保不被面板/地圖蓋住 */
+      z-index: 1009; /* 確保不被面板/地圖蓋住 */
     }
     /* ⇩ 新增：資料來源（左下角） */
     .source {
@@ -144,7 +144,7 @@
 </div>
 
 <div id="legend" class="legend"></div>
-<div class="credit">底圖 © OpenStreetMap 貢獻者</div>
+<div class="credit">底圖 © OpenStreetMap</div>
 <!-- 資料來源（動態顯示目前 CSV 與已選資料集數量） -->
 <div class="source" id="sourceFooter">
   資料來源：<a href="https://tbiadata.tw/" target="_blank" rel="noopener noreferrer">TBIA</a>

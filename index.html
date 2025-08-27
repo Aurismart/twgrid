@@ -66,8 +66,7 @@
       position: absolute; left: 10px; bottom: 10px; background: rgba(255,255,255,.9);
       padding: 8px 10px; border-radius: 8px; font-size: 16px; border: 1px solid #ccc;
       max-width: min(60vw, 700px);
-      z-index: 1100; /* ← 新增這行，確保不被面板/地圖蓋住 */
-
+      z-index: 1100; /* 確保不被面板/地圖蓋住 */
     }
     .source a { text-decoration: none; }
     .source a:hover { text-decoration: underline; }
@@ -78,8 +77,6 @@
     .panel.collapsed { padding:8px; min-width:auto; width:auto; }
     .panel.collapsed .panel-body, .panel.collapsed .panel-resizer { display:none; }
     .panel.collapsed .panel-header .title { font-size:16px; }
-
-
 
     /* 手機自適應（小於 768px） */
     @media (max-width: 768px) {
@@ -145,7 +142,7 @@
 
 <div id="legend" class="legend"></div>
 <div class="credit">底圖 © OpenStreetMap 貢獻者</div>
-<!-- ⇩ 新增：資料來源（動態顯示目前 CSV 與已選資料集數量） -->
+<!-- 資料來源（動態顯示目前 CSV 與已選資料集數量） -->
 <div class="source" id="sourceFooter">
   資料來源：<a href="https://tbiadata.tw/" target="_blank" rel="noopener noreferrer">TBIA</a>
   （目前：TBIA-鵯科，已選 0 個資料集）
@@ -238,7 +235,8 @@ collapseBtn.addEventListener('click', () => {
 })();
 
 /* —— 調色盤（5 階固定）—— */
-const PALETTE = ['#eff3ff','#bdd7e7','#6baed6','#2171b5','#08306b'];
+// const PALETTE = ['#eff3ff','#bdd7e7','#6baed6','#2171b5','#08306b'];
+const PALETTE = ['#f3e8ff','#d8b4fe','#a78bfa','#7c3aed','#4c1d95'];
 
 /* —— 依「基數 step」決定顏色（0–<step, step–<2*step, …, ≥4*step 共 5 級）—— */
 function colorByStep(v, step){
@@ -353,7 +351,7 @@ function updateSourceFooter(){
     `（目前：<b>${csvLabel}</b>，已選 <b>${n}</b> 個資料集）`;
 }
 
-/* —— 主繪圖（hover 才顯示 Tooltip）—— */
+/* —— 主繪圖（hover 才顯示 Tooltip；值為 0 完全透明且無邊框、無 tooltip）—— */
 function renderLayer(geojson){
   if (gridLayer) { map.removeLayer(gridLayer); gridLayer = null; }
   const step = Math.max(1, Number(stepInput.value)||50);
@@ -361,11 +359,22 @@ function renderLayer(geojson){
   gridLayer = L.geoJSON(geojson, {
     style: f => {
       const v = selectedTotalForGrid(f.properties);
-      return { fillColor: colorByStep(v, step), fillOpacity: 0.8, color: '#ffffff', weight: 0.4 };
+      const isZero = v === 0;
+      return {
+        fillColor: isZero ? 'transparent' : colorByStep(v, step),
+        fillOpacity: isZero ? 0 : 0.8,
+        color: isZero ? 'transparent' : '#ffffff',
+        weight: isZero ? 0 : 0.4
+      };
     },
     onEachFeature: (f, lyr) => {
+      const v = selectedTotalForGrid(f.properties);
+      if (v === 0) {
+        // 值為 0：不綁 tooltip、也不做 hover 效果
+        return;
+      }
       const id = gridIdKey ? (f.properties[gridIdKey] ?? '') : '';
-      const selTotal = selectedTotalForGrid(f.properties);
+      const selTotal = v;
       const topN = Math.max(1, Math.min(10, Number(topNInput.value)||3));
       const rankHtml = buildSpeciesRankHTML(f.properties, topN);
       const html = `

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>TWGrid</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    .panel {
+      position: absolute; top: 10px; left: 10px; z-index: 1000;
+      background: #fff; padding: 12px; border: 1px solid #ccc; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", Arial;
+      min-width: 330px;
+    }
+    .panel label { font-size: 12px; color: #555; display:block; margin-top: 6px; }
+    .panel select, .panel button, .panel input[type="number"] { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
+    .dataset-box { max-height: 230px; overflow: auto; border: 1px solid #ddd; border-radius: 6px; padding: 6px; margin-top: 6px; }
+    .dataset-item { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 14px; }
+    .dataset-item .name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dataset-item .count { color: #666; font-size: 12px; }
+
+    .legend { line-height: 1.2; background: #fff; padding: 8px; border: 1px solid #ccc; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15); position:absolute; right:10px; bottom:60px; }
+    .legend .row { display: flex; align-items: center; margin: 4px 0; }
+    .legend .swatch { width: 14px; height: 14px; margin-right: 6px; border: 1px solid rgba(0,0,0,.2); }
+    .credit {
+      position: absolute; right: 10px; bottom: 10px; background: rgba(255,255,255,.9);
+      padding: 8px 10px; border-radius: 8px; font-size: 12px; border: 1px solid #ccc;
+    }
+    .hint { font-size: 12px; color: #666; margin-top: 6px; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="panel">
+  <div style="font-weight:700;">TWGrid</div>
+
+  <label for="csvSelect">資料來源</label>
+  <select id="csvSelect">
+    <option value="鵯科" selected>鵯科</option>
+    <option value="赤蛙">赤蛙</option>
+    <option value="樹蛙">樹蛙</option>
+  </select>
+
+  <label for="scaleSelect">網格尺度</label>
+  <select id="scaleSelect">
+    <option value="1km">1 公里</option>
+    <option value="5km" selected>5 公里</option>
+    <option value="10km">10 公里</option>
+  </select>
+
+  <label for="schemeSelect">顏色分級（基數可調整）</label>
+  <select id="schemeSelect">
+    <option value="quantile" >分位數</option>
+    <option value="autoMax">等距</option>
+    <option value="fixed" selected>自訂基數</option>
+  </select>
+
+  <div style="display:flex; gap:8px;">
+    <div style="flex:1;">
+      <label for="classesInput">級數（3~9）</label>
+      <input id="classesInput" type="number" min="3" max="9" step="1" value="5" />
+    </div>
+    <div style="flex:1;">
+      <label for="stepInput">基數（固定基數專用）</label>
+      <input id="stepInput" type="number" min="1" step="1" value="50" />
+    </div>
+  </div>
+
+  <label>資料集（依當前 CSV 的全域總筆數排序，僅顯示 Top10）</label>
+  <div class="dataset-box" id="datasetBox"></div>
+  <div style="display:flex; gap:8px; margin-top:6px;">
+    <button id="selectAllBtn">全選</button>
+    <button id="clearAllBtn">全不選</button>
+  </div>
+
+  <label for="topNInput">Tooltip 顯示物種 Top N</label>
+  <input id="topNInput" type="number" min="1" max="10" step="1" value="3" />
+
+  <div class="hint">顏色：所選資料集在每格的總筆數（基數可調）。滑到方格才顯示 Tooltip，內容為「所選資料集合併後的物種排名」。</div>
+</div>
+
+<div id="legend" class="legend"></div>
+<div class="credit">底圖 © OpenStreetMap 貢獻者</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+/* 把這裡改成你的實際檔名（每個 CSV 自己有 1/5/10km 三份） */
+const FILES = {
+  "鵯科": { "1km": "grid_by_ds_species_1km_bird_.geojson", "5km": "grid_by_ds_species_5km_bird_.geojson", "10km": "grid_by_ds_species_10km_bird_.geojson" },
+  "赤蛙": { "1km": "grid_by_ds_species_1km_red_.geojson", "5km": "grid_by_ds_species_5km_red_.geojson", "10km": "grid_by_ds_species_10km_red_.geojson" },
+  "樹蛙": { "1km": "grid_by_ds_species_1km_tree_.geojson", "5km": "grid_by_ds_species_5km_tree_.geojson", "10km": "grid_by_ds_species_10km_tree_.geojson" },
+};
+
+const MAP_CENTER = [23.7, 121.0];
+const MAP_ZOOM   = 7;
+
+const map = L.map('map', { zoomSnap: 0.5 }).setView(MAP_CENTER, MAP_ZOOM);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '© OSM'
+}).addTo(map);
+
+// 狀態
+let gridLayer = null;
+let gridIdKey = null;
+let currentData = null;
+let top10Datasets = [];
+let selectedDatasets = new Set();
+const cache = new Map();
+
+// UI
+const csvSelect     = document.getElementById('csvSelect');
+const scaleSelect   = document.getElementById('scaleSelect');
+const schemeSelect  = document.getElementById('schemeSelect');
+const classesInput  = document.getElementById('classesInput');
+const stepInput     = document.getElementById('stepInput');
+const datasetBox    = document.getElementById('datasetBox');
+const selectAllBtn  = document.getElementById('selectAllBtn');
+const clearAllBtn   = document.getElementById('clearAllBtn');
+const topNInput     = document.getElementById('topNInput');
+
+// 顏色映射與分級（可調基數）
+function colorScale(t){
+  // 提高對比
+  if (t>0.7) return '#08306b';
+  if (t>0.5) return '#2171b5';
+  if (t>0.3) return '#6baed6';
+  if (t>0.1) return '#bdd7e7';
+  return '#eff3ff';
+}
+function getBreaks(values){
+  const k = Math.max(3, Math.min(9, Number(classesInput.value)||5));
+  const mode = schemeSelect.value;
+  const vs = values.filter(v => Number.isFinite(v)).sort((a,b)=>a-b);
+  if (vs.length===0) return [0,1,2,3,4,5];
+
+  if (mode === 'quantile') {
+    const q = [];
+    for (let i=0;i<=k;i++){
+      const pos = i*(vs.length-1)/k;
+      const lo = Math.floor(pos), hi = Math.ceil(pos);
+      const val = (lo===hi) ? vs[lo] : vs[lo] + (vs[hi]-vs[lo])*(pos-lo);
+      q.push(val);
+    }
+    return Array.from(new Set(q));
+  }
+  if (mode === 'autoMax') {
+    const max = Math.max(...vs, 1);
+    const step = Math.ceil(max / k) || 1;
+    const arr = []; for (let i=0;i<=k;i++) arr.push(i*step);
+    return arr;
+  }
+  // 固定步長（自訂基數）
+  const step = Math.max(1, Number(stepInput.value)||50);
+  const arr = []; for (let i=0;i<=k;i++) arr.push(i*step);
+  return arr;
+}
+function getColorByValue(v, breaks){
+  if (!Number.isFinite(v) || breaks.length<2) return '#eff3ff';
+  const min = breaks[0], max = breaks[breaks.length-1];
+  const t = (max===min) ? 0 : (v - min) / (max - min);
+  return colorScale(t);
+}
+function updateLegend(breaks, title="所選資料集總筆數") {
+  const el = document.getElementById('legend');
+  if (breaks.length < 2) { el.innerHTML = '<b>圖例</b><div>無資料</div>'; return; }
+  const rows = [];
+  for (let i=0;i<breaks.length-1;i++){
+    const v0 = breaks[i], v1 = breaks[i+1];
+    const mid = (v0+v1)/2;
+    rows.push(
+      `<div class="row">
+         <div class="swatch" style="background:${getColorByValue(mid, breaks)}"></div>
+         <div>${Math.round(v0).toLocaleString()}–${Math.round(v1).toLocaleString()}</div>
+       </div>`
+    );
+  }
+  const modeLabel = schemeSelect.value === 'quantile' ? '分位數'
+                   : schemeSelect.value === 'autoMax' ? '等距(自動最大值)'
+                   : `固定步長=${Number(stepInput.value)||50}`;
+  const k = Math.max(3, Math.min(9, Number(classesInput.value)||5));
+  el.innerHTML = `<div style="font-weight:600;margin-bottom:6px;">圖例：${title}｜${modeLabel}｜級數=${k}</div>${rows.join('')}`;
+}
+
+// 計算（依**當前 CSV**）：Top10 資料集、所選資料集總筆數、所選資料集的物種排名
+function computeTop10Datasets(geojson){
+  const totals = {};
+  for (const f of geojson.features) {
+    const ds = f.properties?.datasets || {};
+    for (const [name, obj] of Object.entries(ds)) {
+      totals[name] = (totals[name] || 0) + Number(obj?.total || 0);
+    }
+  }
+  const sorted = Object.keys(totals).sort((a,b)=>{
+    const da = totals[a]||0, db = totals[b]||0;
+    if (db !== da) return db - da;
+    return a.localeCompare(b, 'zh-Hant');
+  });
+  return { top10: sorted.slice(0,10), totals };
+}
+function selectedTotalForGrid(props){
+  const ds = props.datasets || {};
+  if (selectedDatasets.size===0) return 0;
+  let s = 0;
+  for (const name of selectedDatasets) s += Number(ds[name]?.total || 0);
+  return s;
+}
+function speciesCountsForSelected(props){
+  const ds = props.datasets || {};
+  const acc = {};
+  for (const name of selectedDatasets) {
+    const sp = ds[name]?.species || {};
+    for (const [k,v] of Object.entries(sp)) acc[k] = (acc[k]||0) + Number(v||0);
+  }
+  return acc;
+}
+function buildSpeciesRankHTML(props, topN){
+  const m = speciesCountsForSelected(props);
+  const arr = Object.entries(m).filter(([,v]) => v>0);
+  arr.sort((a,b)=>b[1]-a[1]);
+  const top = arr.slice(0, topN);
+  if (top.length===0) return "";
+  const fmt = (s)=> (s.length>10 ? s.slice(0,10)+'…' : s);
+  return top.map(([name,cnt],i)=>`${i+1}. ${fmt(name)}(${cnt})`).join('<br>');
+}
+
+// UI：依當前 CSV 重建 Top10 清單
+function rebuildDatasetList(geojson){
+  const { top10, totals } = computeTop10Datasets(geojson);
+  top10Datasets = top10;
+
+  // 沒選擇→預設全選；若換 CSV/尺度，把不在 Top10 的移除
+  selectedDatasets = new Set([...selectedDatasets].filter(n => top10Datasets.includes(n)));
+  if (selectedDatasets.size===0) selectedDatasets = new Set(top10Datasets);
+
+  datasetBox.innerHTML = '';
+  for (const name of top10Datasets) {
+    const id = `ds_${btoa(encodeURIComponent(name)).replace(/=+$/,'')}`;
+    const row = document.createElement('div');
+    row.className = 'dataset-item';
+    row.innerHTML = `
+      <input type="checkbox" id="${id}" ${selectedDatasets.has(name)?'checked':''}>
+      <label for="${id}" class="name" title="${name}">${name}</label>
+      <span class="count">(${(totals[name]||0).toLocaleString()})</span>`;
+    datasetBox.appendChild(row);
+    row.querySelector('input').addEventListener('change', e => {
+      if (e.target.checked) selectedDatasets.add(name); else selectedDatasets.delete(name);
+      renderLayer(currentData);
+    });
+  }
+}
+
+// 格網 ID 欄位
+function detectGridId(geojson){
+  const props = geojson.features[0]?.properties || {};
+  const keys = Object.keys(props);
+  gridIdKey = keys.includes('Name') ? 'Name'
+           : (keys.includes('grid_id') ? 'grid_id'
+           : keys.find(k => !['total_count','datasets'].includes(k)) || null);
+}
+
+// 主繪圖（無中心標籤；滑到格網才顯示物種排名）
+function renderLayer(geojson){
+  if (gridLayer) { map.removeLayer(gridLayer); gridLayer = null; }
+
+  const values = geojson.features.map(f => selectedTotalForGrid(f.properties));
+  const breaks = getBreaks(values);
+
+  gridLayer = L.geoJSON(geojson, {
+    style: f => ({
+      fillColor: getColorByValue(selectedTotalForGrid(f.properties), breaks),
+      fillOpacity: 0.8, color: '#ffffff', weight: 0.4
+    }),
+    onEachFeature: (f, lyr) => {
+      const id = gridIdKey ? (f.properties[gridIdKey] ?? '') : '';
+      const selTotal = selectedTotalForGrid(f.properties);
+      const topN = Math.max(1, Math.min(10, Number(topNInput.value)||3));
+      const rankHtml = buildSpeciesRankHTML(f.properties, topN);
+      const html = `
+        <div>
+          <div><b>格網：</b>${id}</div>
+          <div><b>所選資料集總筆數：</b>${selTotal.toLocaleString()}</div>
+          ${rankHtml ? `<div style="margin-top:6px;"><b>物種 Top${topN}：</b><div style="margin-top:4px;">${rankHtml}</div></div>` : '<div style="margin-top:6px; color:#666;">此格無符合所選資料集的物種資料</div>'}
+        </div>`;
+      lyr.bindTooltip(html, {sticky:true});
+      lyr.on({
+        mouseover: e => e.target.setStyle({weight:1, color:'#333'}),
+        mouseout:  e => e.target.setStyle({weight:0.4, color:'#fff'})
+      });
+    }
+  }).addTo(map);
+
+  updateLegend(breaks);
+}
+
+// 載入當前 CSV + 尺度
+async function loadCurrent(){
+  const csvTag = csvSelect.value;
+  const scale  = scaleSelect.value;
+  const url = FILES[csvTag][scale];
+  if (!url) { alert('檔案設定錯誤'); return; }
+
+  if (!cache.has(url)) {
+    const res = await fetch(url);
+    const data = await res.json();
+    cache.set(url, data);
+  }
+  currentData = cache.get(url);
+
+  detectGridId(currentData);
+  selectedDatasets.clear(); // 切換 CSV/尺度時重置，由 rebuildDatasetList 決定預設
+  rebuildDatasetList(currentData);
+  renderLayer(currentData);
+}
+
+// 事件
+[csvSelect, scaleSelect].forEach(el => el.addEventListener('change', loadCurrent));
+[schemeSelect, classesInput, stepInput, topNInput].forEach(el => el.addEventListener('change', () => renderLayer(currentData)));
+selectAllBtn.addEventListener('click', () => { selectedDatasets = new Set(top10Datasets); renderLayer(currentData); rebuildDatasetList(currentData); });
+clearAllBtn.addEventListener('click', () => { selectedDatasets.clear(); renderLayer(currentData); rebuildDatasetList(currentData); });
+
+// 初始
+loadCurrent();
+</script>
+</body>
+</html>
